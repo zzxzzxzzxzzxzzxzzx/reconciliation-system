@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "OrderIssueType" ADD VALUE 'CROSS_PERIOD_SETTLEMENT';

@@ -1,0 +1,409 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImportDataType {
+  DOUYIN_ORDER
+  DOUYIN_SETTLEMENT
+  DOUYIN_COST
+  DOUYIN_LIVE
+  QIANCHUAN_SPEND
+}
+
+enum ImportStatus {
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
+enum ReconciliationTaskStatus {
+  READY
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model ImportBatch {
+  id             String         @id @default(uuid()) @db.Uuid
+  dataType       ImportDataType @map("data_type")
+  status         ImportStatus   @default(PROCESSING)
+  sourceFileName String         @map("source_file_name")
+  fileHash       String         @map("file_hash")
+  originalFile   Bytes?         @map("original_file") @db.ByteA
+  mimeType       String?        @map("mime_type")
+  totalRows      Int            @default(0) @map("total_rows")
+  successRows    Int            @default(0) @map("success_rows")
+  failedRows     Int            @default(0) @map("failed_rows")
+  duplicateRows  Int            @default(0) @map("duplicate_rows")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  completedAt    DateTime?      @map("completed_at")
+  archivedAt     DateTime?      @map("archived_at")
+  rawRecords     RawRecord[]
+  errors         ImportError[]
+  orders         ShopOrder[]
+  settlements    Settlement[]
+  costVersion    CostVersion?
+  liveSessions   LiveSession[]
+  qianchuanSpends QianchuanSpend[]
+  reconciliationOrderTasks      ReconciliationTask[] @relation("ReconciliationOrderBatch")
+  reconciliationSettlementTasks ReconciliationTask[] @relation("ReconciliationSettlementBatch")
+  reconciliationCostTasks       ReconciliationTask[] @relation("ReconciliationCostBatch")
+  reconciliationLiveTasks       ReconciliationTask[] @relation("ReconciliationLiveBatch")
+
+  @@unique([dataType, fileHash])
+  @@map("import_batch")
+}
+
+model ReconciliationTask {
+  id               String                   @id @default(uuid()) @db.Uuid
+  accountingMonth  String                   @map("accounting_month")
+  status           ReconciliationTaskStatus @default(READY)
+  orderBatchId     String                   @map("order_batch_id") @db.Uuid
+  settlementBatchId String                  @map("settlement_batch_id") @db.Uuid
+  costBatchId      String?                  @map("cost_batch_id") @db.Uuid
+  liveBatchId      String?                  @map("live_batch_id") @db.Uuid
+  sourceIssueKey   String?                  @map("source_issue_key")
+  sourceIssueType  OrderIssueType?          @map("source_issue_type")
+  sourceIssueOrderNo String?                @map("source_issue_order_no")
+  supplementTarget ImportDataType?          @map("supplement_target")
+  errorMessage     String?                  @map("error_message")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  archivedAt       DateTime?                @map("archived_at")
+  orderBatch       ImportBatch              @relation("ReconciliationOrderBatch", fields: [orderBatchId], references: [id], onDelete: Restrict)
+  settlementBatch  ImportBatch              @relation("ReconciliationSettlementBatch", fields: [settlementBatchId], references: [id], onDelete: Restrict)
+  costBatch        ImportBatch?             @relation("ReconciliationCostBatch", fields: [costBatchId], references: [id], onDelete: Restrict)
+  liveBatch        ImportBatch?             @relation("ReconciliationLiveBatch", fields: [liveBatchId], references: [id], onDelete: Restrict)
+
+  @@index([accountingMonth])
+  @@index([status])
+  @@index([sourceIssueKey])
+  @@map("reconciliation_task")
+}
+
+model RawRecord {
+  id        String      @id @default(uuid()) @db.Uuid
+  batchId   String      @map("batch_id") @db.Uuid
+  rowNumber Int         @map("row_number")
+  rawData   Json        @map("raw_data")
+  createdAt DateTime    @default(now()) @map("created_at")
+  batch     ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId])
+  @@map("raw_record")
+}
+
+model ImportError {
+  id        String      @id @default(uuid()) @db.Uuid
+  batchId   String      @map("batch_id") @db.Uuid
+  rowNumber Int?        @map("row_number")
+  code      String
+  message   String
+  rawData   Json?       @map("raw_data")
+  createdAt DateTime    @default(now()) @map("created_at")
+  batch     ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@map("import_error")
+}
+
+enum OrderIssueType {
+  SPLIT_AMBIGUOUS
+  PRODUCT_ID_MISSING
+  PRODUCT_UNMATCHED
+  SETTLEMENT_WITHOUT_ORDER
+  ORDER_WITHOUT_SETTLEMENT
+  CROSS_PERIOD_SETTLEMENT
+  COST_MISSING
+  COST_CONFLICT
+  LIVE_SESSION_CONFLICT
+  ORDER_TIME_MISSING
+}
+
+enum IssueResolutionStatus {
+  PENDING
+  NEEDS_DATA
+  CONFIRMED
+  RESOLVED
+}
+
+enum OrderOwnershipType {
+  SELF
+  INFLUENCER
+}
+
+enum LiveMatchStatus {
+  SELF_LIVE
+  SELF_NON_LIVE
+  INFLUENCER
+  CONFLICT
+  MISSING_ORDER_TIME
+}
+
+enum CostVersionStatus {
+  PENDING
+  ACTIVE
+}
+
+enum CostSnapshotStatus {
+  PENDING_VERSION
+  MATCHED
+  MISSING
+  CONFLICT
+}
+
+model ShopOrder {
+  id                  String      @id @default(uuid()) @db.Uuid
+  mainOrderNo         String      @map("main_order_no")
+  status              String?
+  payType             String?     @map("pay_type")
+  orderType           String?     @map("order_type")
+  appChannel          String?     @map("app_channel")
+  payableAmount       Decimal?    @map("payable_amount") @db.Decimal(12, 2)
+  merchantIncome      Decimal?    @map("merchant_income") @db.Decimal(12, 2)
+  totalProductAmount  Decimal?    @map("total_product_amount") @db.Decimal(12, 2)
+  totalQuantity       Int?        @map("total_quantity")
+  submittedAt         DateTime?   @map("submitted_at")
+  paidAt              DateTime?   @map("paid_at")
+  finishedAt          DateTime?   @map("finished_at")
+  promisedDeliveryAt  DateTime?   @map("promised_delivery_at")
+  shippedAt           DateTime?   @map("shipped_at")
+  afterSaleStatus     String?     @map("after_sale_status")
+  cancelReason        String?     @map("cancel_reason")
+  buyerMessage        String?     @map("buyer_message")
+  merchantRemark      String?     @map("merchant_remark")
+  influencerId        String?     @map("influencer_id")
+  influencerNickname  String?     @map("influencer_nickname")
+  trafficSource       String?     @map("traffic_source")
+  trafficChannel      String?     @map("traffic_channel")
+  isSampleOrder       String?     @map("is_sample_order")
+  isChannelProduct    String?     @map("is_channel_product")
+  ownershipType       OrderOwnershipType? @map("ownership_type")
+  liveMatchStatus     LiveMatchStatus? @map("live_match_status")
+  liveSessionId       String?     @map("live_session_id") @db.Uuid
+  batchId             String      @map("batch_id") @db.Uuid
+  rowNumber           Int         @map("row_number")
+  sourceFileName      String      @map("source_file_name")
+  rawData             Json        @map("raw_data")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  batch               ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  items               OrderItem[]
+  settlements         Settlement[]
+  liveSession         LiveSession? @relation(fields: [liveSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([mainOrderNo])
+  @@index([batchId])
+  @@index([ownershipType])
+  @@index([liveMatchStatus])
+  @@index([liveSessionId])
+  @@map("shop_order")
+}
+
+model LiveSession {
+  id              String      @id @default(uuid()) @db.Uuid
+  liveId          String      @map("live_id")
+  anchorNickname  String?     @map("anchor_nickname")
+  anchorDouyinId  String      @map("anchor_douyin_id")
+  startedAt       DateTime    @map("started_at")
+  endedAt         DateTime    @map("ended_at")
+  durationMinutes Decimal?    @map("duration_minutes") @db.Decimal(10, 2)
+  batchId         String      @map("batch_id") @db.Uuid
+  rowNumber       Int         @map("row_number")
+  sourceFileName  String      @map("source_file_name")
+  rawData         Json        @map("raw_data")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  batch           ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  orders          ShopOrder[]
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId])
+  @@index([startedAt, endedAt])
+  @@map("live_session")
+}
+
+model OrderItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  orderId        String    @map("order_id") @db.Uuid
+  subOrderNo     String?   @map("sub_order_no")
+  productId      String?   @map("product_id")
+  merchantCode   String?   @map("merchant_code")
+  productTitle   String?   @map("product_title")
+  skuCode        String?   @map("sku_code")
+  quantity       Int?
+  productAmount  Decimal?  @map("product_amount") @db.Decimal(12, 2)
+  itemIndex      Int       @map("item_index")
+  batchId        String    @map("batch_id") @db.Uuid
+  rowNumber      Int       @map("row_number")
+  sourceFileName String    @map("source_file_name")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  order          ShopOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  costSnapshot   OrderItemCostSnapshot?
+
+  @@unique([orderId, itemIndex])
+  @@index([productId])
+  @@index([merchantCode])
+  @@index([batchId])
+  @@map("order_item")
+}
+
+model CostVersion {
+  id             String            @id @default(uuid()) @db.Uuid
+  batchId        String            @unique @map("batch_id") @db.Uuid
+  status         CostVersionStatus @default(PENDING)
+  effectiveFrom  DateTime?         @map("effective_from")
+  sourceFileName String            @map("source_file_name")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  batch          ImportBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  costs          ProductCost[]
+  snapshots      OrderItemCostSnapshot[]
+
+  @@map("cost_version")
+}
+
+model ProductCost {
+  id             String      @id @default(uuid()) @db.Uuid
+  versionId      String      @map("version_id") @db.Uuid
+  productId      String      @map("product_id")
+  merchantCode   String      @default("") @map("merchant_code")
+  compositeKey   String      @map("composite_key")
+  productName    String?     @map("product_name")
+  unitCost       Decimal?    @map("unit_cost") @db.Decimal(12, 2)
+  remark         String?
+  rowNumber      Int         @map("row_number")
+  rawData        Json        @map("raw_data")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  version        CostVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  snapshots      OrderItemCostSnapshot[]
+
+  @@index([versionId, compositeKey])
+  @@index([productId, merchantCode])
+  @@map("product_cost")
+}
+
+model OrderItemCostSnapshot {
+  id            String             @id @default(uuid()) @db.Uuid
+  orderItemId   String             @unique @map("order_item_id") @db.Uuid
+  versionId     String             @map("version_id") @db.Uuid
+  productCostId String?            @map("product_cost_id") @db.Uuid
+  status        CostSnapshotStatus
+  unitCost      Decimal?           @map("unit_cost") @db.Decimal(12, 2)
+  quantity      Int?
+  totalCost     Decimal?           @map("total_cost") @db.Decimal(12, 2)
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  orderItem     OrderItem          @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  version       CostVersion        @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  productCost   ProductCost?       @relation(fields: [productCostId], references: [id], onDelete: SetNull)
+
+  @@index([versionId])
+  @@index([status])
+  @@map("order_item_cost_snapshot")
+}
+
+model OrderIssue {
+  id             String         @id @default(uuid()) @db.Uuid
+  issueType      OrderIssueType @map("issue_type")
+  mainOrderNo    String?        @map("main_order_no")
+  orderId        String?        @map("order_id") @db.Uuid
+  message        String
+  detail         Json?
+  batchId        String         @map("batch_id") @db.Uuid
+  rowNumber      Int?           @map("row_number")
+  sourceFileName String?        @map("source_file_name")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  @@index([issueType])
+  @@index([batchId])
+  @@map("order_issue")
+}
+
+model OrderIssueResolution {
+  id          String                @id @default(uuid()) @db.Uuid
+  issueKey    String                @unique @map("issue_key")
+  status      IssueResolutionStatus @default(PENDING)
+  note        String?
+  resolvedAt  DateTime?             @map("resolved_at")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("order_issue_resolution")
+}
+
+model Settlement {
+  id                String     @id @default(uuid()) @db.Uuid
+  orderNoFixed      String     @map("order_no_fixed")
+  subOrderNoFixed   String?    @map("sub_order_no_fixed")
+  settledAt         DateTime?  @map("settled_at")
+  amount            Decimal    @db.Decimal(12, 2)
+  account           String?
+  settlementType    String?    @map("settlement_type")
+  hasRefundBefore   String?    @map("has_refund_before")
+  orderedAt         DateTime?  @map("ordered_at")
+  productId         String?    @map("product_id")
+  productName       String?    @map("product_name")
+  productQuantity   Int?       @map("product_quantity")
+  influencerId      String?    @map("influencer_id")
+  influencerName    String?    @map("influencer_name")
+  businessType      String?    @map("business_type")
+  orderType         String?    @map("order_type")
+  orderTotalPrice   Decimal?   @map("order_total_price") @db.Decimal(12, 2)
+  productTotalPrice Decimal?   @map("product_total_price") @db.Decimal(12, 2)
+  shippingFee       Decimal?   @map("shipping_fee") @db.Decimal(12, 2)
+  incomeTotal       Decimal?   @map("income_total") @db.Decimal(12, 2)
+  expenseTotal      Decimal?   @map("expense_total") @db.Decimal(12, 2)
+  platformServiceFee Decimal?  @map("platform_service_fee") @db.Decimal(12, 2)
+  influencerCommission Decimal? @map("influencer_commission") @db.Decimal(12, 2)
+  merchantEntity    String?    @map("merchant_entity")
+  appChannel        String?    @map("app_channel")
+  remark            String?
+  orderId           String?    @map("order_id") @db.Uuid
+  batchId           String     @map("batch_id") @db.Uuid
+  rowNumber         Int        @map("row_number")
+  sourceFileName    String     @map("source_file_name")
+  rawData           Json       @map("raw_data")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  order             ShopOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  batch             ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([orderNoFixed])
+  @@index([orderId])
+  @@index([batchId])
+  @@map("settlement")
+}
+
+model QianchuanSpend {
+  id                String      @id @default(uuid()) @db.Uuid
+  batchId           String      @map("batch_id") @db.Uuid
+  accountName       String      @map("account_name")
+  spendDate         DateTime    @map("spend_date") @db.Date
+  totalSpend        Decimal?    @map("total_spend") @db.Decimal(12, 2)
+  nonGiftSpend      Decimal?    @map("non_gift_spend") @db.Decimal(12, 2)
+  giftSpend         Decimal?    @map("gift_spend") @db.Decimal(12, 2)
+  redPacketSpend    Decimal?    @map("red_packet_spend") @db.Decimal(12, 2)
+  discountSpend     Decimal?    @map("discount_spend") @db.Decimal(12, 2)
+  sharedWalletSpend Decimal?    @map("shared_wallet_spend") @db.Decimal(12, 2)
+  sharedGiftSpend   Decimal?    @map("shared_gift_spend") @db.Decimal(12, 2)
+  rawData           Json        @map("raw_data")
+  rowNumber         Int         @map("row_number")
+  sourceFileName    String      @map("source_file_name")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  batch             ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, accountName, spendDate])
+  @@index([accountName, spendDate])
+  @@index([batchId])
+  @@map("qianchuan_spend")
+}

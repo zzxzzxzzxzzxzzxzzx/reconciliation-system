@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: reconciliation
+      POSTGRES_USER: reconciliation
+      POSTGRES_PASSWORD: reconciliation
+    ports:
+      - "55432:5432"
+    volumes:
+      - reconciliation_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reconciliation -d reconciliation"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: reconciliation_test
+      POSTGRES_USER: reconciliation
+      POSTGRES_PASSWORD: reconciliation
+    ports:
+      - "55433:5432"
+    volumes:
+      - reconciliation_postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reconciliation -d reconciliation_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  reconciliation_postgres_data:
+  reconciliation_postgres_test_data:

@@ -1,0 +1,15 @@
+.git
+.backups
+.env
+.env.*
+!.env.example
+!.env.staging.example
+node_modules
+**/node_modules
+**/.next
+**/dist
+coverage
+*.log
+.DS_Store
+backups
+deploy/nginx/.htpasswd

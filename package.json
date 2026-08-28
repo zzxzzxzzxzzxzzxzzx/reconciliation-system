@@ -1,0 +1,29 @@
+{
+  "name": "reconciliation-system",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run start:dev -w @reconciliation/api\" \"npm run dev -w @reconciliation/web\"",
+    "build": "npm run build -w @reconciliation/api && npm run build -w @reconciliation/web",
+    "test": "npm run test -w @reconciliation/api",
+    "test:e2e": "npm run test:e2e -w @reconciliation/api",
+    "lint": "npm run lint -w @reconciliation/api && npm run lint -w @reconciliation/web",
+    "db:generate": "npm run prisma:generate -w @reconciliation/api",
+    "db:migrate": "npm run prisma:migrate -w @reconciliation/api",
+    "infra:up": "docker compose -p reconciliation-system up -d postgres",
+    "infra:down": "docker compose -p reconciliation-system down",
+    "staging:deploy": "sh scripts/staging-deploy.sh",
+    "staging:backup": "sh scripts/staging-backup.sh",
+    "staging:logs": "docker compose --env-file .env.staging -f compose.staging.yaml logs -f --tail=200",
+    "staging:down": "docker compose --env-file .env.staging -f compose.staging.yaml down"
+  },
+  "devDependencies": {
+    "concurrently": "9.2.1"
+  }
+}

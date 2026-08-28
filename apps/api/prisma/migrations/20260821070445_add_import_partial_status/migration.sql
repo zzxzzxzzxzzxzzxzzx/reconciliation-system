@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ImportStatus" ADD VALUE 'COMPLETED_WITH_ERRORS';

@@ -1,0 +1,47 @@
+{
+  "name": "@reconciliation/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "test": "jest --runInBand",
+    "test:e2e": "node ./test/prepare-e2e.mjs && jest --config ./test/jest-e2e.json --runInBand",
+    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "node -r dotenv/config node_modules/prisma/build/index.js migrate deploy dotenv_config_path=../../.env"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.2.1",
+    "@nestjs/core": "11.2.1",
+    "@nestjs/platform-express": "11.2.1",
+    "@prisma/client": "6.12.0",
+    "csv-parse": "^7.0.2",
+    "dotenv": "17.4.1",
+    "multer": "^2.2.0",
+    "read-excel-file": "^9.3.10",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@nestjs/cli": "11.0.24",
+    "@nestjs/testing": "11.2.1",
+    "@types/jest": "29.5.14",
+    "@types/multer": "^2.0.0",
+    "@types/node": "22.20.1",
+    "@types/supertest": "^6.0.3",
+    "@typescript-eslint/eslint-plugin": "8.67.0",
+    "@typescript-eslint/parser": "8.67.0",
+    "eslint": "9.39.5",
+    "jest": "29.7.0",
+    "prisma": "6.12.0",
+    "supertest": "^7.1.4",
+    "ts-jest": "29.4.1",
+    "ts-node": "10.9.2",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.67.0",
+    "write-excel-file": "^4.1.1"
+  }
+}

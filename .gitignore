@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+coverage/
+.env
+.env.local
+.env.staging
+*.log
+.DS_Store
+backups/
+.backups/
+deploy/nginx/.htpasswd
